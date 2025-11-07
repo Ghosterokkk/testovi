@@ -1,1 +1,1296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Медицинский тест для сотрудников</title>
+    <link rel="icon" type="image/png" href="Med.png">
+    <style>
+        /* ... (все предыдущие стили остаются без изменений) ... */
+        
+        .test-completed {
+            background-color: #e8f5e8;
+            border: 2px solid #4caf50;
+        }
+        
+        .test-completed-badge {
+            background-color: #4caf50;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .allow-retake-btn {
+            background-color: #ff9800;
+            margin-left: 10px;
+        }
+        
+        .allow-retake-btn:hover {
+            background-color: #f57c00;
+        }
+    </style>
+</head>
+<body>
+    <div class="firebase-status hidden" id="firebase-status"></div>
+    
+    <div class="container">
+        <header>
+            <h1>Медицинский Тест</h1>
+            <p class="description">Система тестирования медицинских знаний</p>
+            <button class="btn admin-btn" id="admin-toggle">Режим администратора</button>
+        </header>
+        
+        <!-- Панель пользователя -->
+        <div id="user-panel">
+            <!-- ... (остальная HTML структура остается без изменений) ... -->
+        </div>
+        
+        <!-- Админ-панель -->
+        <div class="admin-panel" id="admin-panel">
+            <!-- ... (остальная HTML структура остается без изменений) ... -->
+        </div>
+        
+        <footer>
+            <p>Система Тестирования Медицинского Корпуса © 2025</p>
+        </footer>
+    </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+
+    <script>
+        // 🔥 КОНФИГУРАЦИЯ FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyBYJhWIl_ODTKNwQ8p4JuvDXuqKTYEbWU4",
+            authDomain: "testingmk-c7c07.firebaseapp.com",
+            projectId: "testingmk-c7c07",
+            storageBucket: "testingmk-c7c07.firebasestorage.app",
+            messagingSenderId: "425991665299",
+            appId: "1:425991665299:web:825931edb1e3d773873f66"
+        };
+
+        // Инициализация Firebase
+        let db;
+        let auth;
+        let firebaseConnected = false;
+
+        try {
+            // Проверяем, доступен ли Firebase
+            if (typeof firebase !== 'undefined' && firebaseConfig.apiKey) {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                auth = firebase.auth();
+                firebaseConnected = true;
+                console.log("✅ Firebase подключен");
+                updateFirebaseStatus(true);
+                
+                // Создаем администратора по умолчанию при первом запуске
+                createDefaultAdmin();
+            } else {
+                console.log("⚠️ Firebase не настроен, используется localStorage");
+                updateFirebaseStatus(false);
+            }
+        } catch (error) {
+            console.error("❌ Ошибка Firebase:", error);
+            updateFirebaseStatus(false);
+        }
+
+        // Создание администратора по умолчанию
+        async function createDefaultAdmin() {
+            try {
+                const users = await loadUsers();
+                const adminExists = users.some(user => user.role === 'admin');
+                
+                if (!adminExists) {
+                    const defaultAdmin = {
+                        login: 'admin',
+                        password: 'admin123',
+                        role: 'admin',
+                        unit: 'none'
+                    };
+                    
+                    await saveUser(defaultAdmin);
+                    console.log('✅ Администратор по умолчанию создан');
+                }
+            } catch (error) {
+                console.error('❌ Ошибка создания администратора по умолчанию:', error);
+            }
+        }
+
+        function updateFirebaseStatus(connected) {
+            const statusElement = document.getElementById('firebase-status');
+            if (connected) {
+                statusElement.textContent = 'Firebase: Подключено';
+                statusElement.className = 'firebase-status firebase-connected';
+                statusElement.classList.remove('hidden');
+            } else {
+                statusElement.textContent = 'Firebase: Не подключено (локальный режим)';
+                statusElement.className = 'firebase-status firebase-disconnected';
+                statusElement.classList.remove('hidden');
+            }
+        }
+
+        // Firebase функции
+        async function loadUsers() {
+            try {
+                if (!firebaseConnected) {
+                    return getLocalUsers();
+                }
+
+                const snapshot = await db.collection('users').get();
+                const users = [];
+                
+                snapshot.forEach(doc => {
+                    users.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                return users;
+            } catch (error) {
+                console.error('❌ Ошибка загрузки пользователей:', error);
+                return getLocalUsers();
+            }
+        }
+
+        async function saveUser(user) {
+            try {
+                if (!firebaseConnected) {
+                    return saveUserToLocal(user);
+                }
+
+                if (user.id) {
+                    await db.collection('users').doc(user.id).update(user);
+                } else {
+                    const docRef = await db.collection('users').add(user);
+                    user.id = docRef.id;
+                }
+                
+                saveUserToLocal(user);
+                return user;
+            } catch (error) {
+                console.error('❌ Ошибка сохранения пользователя:', error);
+                saveUserToLocal(user);
+                throw error;
+            }
+        }
+
+        async function deleteUser(userId) {
+            try {
+                if (!firebaseConnected) {
+                    const users = getLocalUsers();
+                    const updatedUsers = users.filter(u => u.id !== userId);
+                    localStorage.setItem('medicalTestUsers', JSON.stringify(updatedUsers));
+                    return;
+                }
+
+                await db.collection('users').doc(userId).delete();
+                
+                const users = getLocalUsers();
+                const updatedUsers = users.filter(u => u.id !== userId);
+                localStorage.setItem('medicalTestUsers', JSON.stringify(updatedUsers));
+                
+            } catch (error) {
+                console.error('❌ Ошибка удаления пользователя:', error);
+                throw error;
+            }
+        }
+
+        async function loadQuestionSets() {
+            try {
+                if (!firebaseConnected) {
+                    return getLocalQuestionSets();
+                }
+
+                const snapshot = await db.collection('questionSets').get();
+                const questionSets = [];
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    questionSets.push({
+                        id: doc.id,
+                        name: data.name,
+                        totalTime: data.totalTime || 30,
+                        questions: data.questions || []
+                    });
+                });
+                
+                return questionSets;
+            } catch (error) {
+                console.error('❌ Ошибка загрузки наборов вопросов:', error);
+                return getLocalQuestionSets();
+            }
+        }
+
+        async function saveQuestionSet(questionSet) {
+            try {
+                if (!firebaseConnected) {
+                    return saveQuestionSetToLocal(questionSet);
+                }
+
+                if (questionSet.id) {
+                    await db.collection('questionSets').doc(questionSet.id).update(questionSet);
+                } else {
+                    const docRef = await db.collection('questionSets').add(questionSet);
+                    questionSet.id = docRef.id;
+                }
+                
+                saveQuestionSetToLocal(questionSet);
+                return questionSet;
+            } catch (error) {
+                console.error('❌ Ошибка сохранения набора вопросов:', error);
+                saveQuestionSetToLocal(questionSet);
+                throw error;
+            }
+        }
+
+        async function deleteQuestionSet(questionSetId) {
+            try {
+                if (!firebaseConnected) {
+                    const questionSets = getLocalQuestionSets();
+                    const updatedQuestionSets = questionSets.filter(qs => qs.id !== questionSetId);
+                    localStorage.setItem('medicalTestQuestionSets', JSON.stringify(updatedQuestionSets));
+                    return;
+                }
+
+                await db.collection('questionSets').doc(questionSetId).delete();
+                
+                const questionSets = getLocalQuestionSets();
+                const updatedQuestionSets = questionSets.filter(qs => qs.id !== questionSetId);
+                localStorage.setItem('medicalTestQuestionSets', JSON.stringify(updatedQuestionSets));
+                
+            } catch (error) {
+                console.error('❌ Ошибка удаления набора вопросов:', error);
+                throw error;
+            }
+        }
+
+        async function loadAssignments() {
+            try {
+                if (!firebaseConnected) {
+                    return getLocalAssignments();
+                }
+
+                const snapshot = await db.collection('assignments').get();
+                const assignments = [];
+                
+                snapshot.forEach(doc => {
+                    assignments.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                return assignments;
+            } catch (error) {
+                console.error('❌ Ошибка загрузки назначений:', error);
+                return getLocalAssignments();
+            }
+        }
+
+        async function saveAssignment(assignment) {
+            try {
+                if (!firebaseConnected) {
+                    return saveAssignmentToLocal(assignment);
+                }
+
+                if (assignment.id) {
+                    await db.collection('assignments').doc(assignment.id).update(assignment);
+                } else {
+                    const docRef = await db.collection('assignments').add(assignment);
+                    assignment.id = docRef.id;
+                }
+                
+                saveAssignmentToLocal(assignment);
+                return assignment;
+            } catch (error) {
+                console.error('❌ Ошибка сохранения назначения:', error);
+                saveAssignmentToLocal(assignment);
+                throw error;
+            }
+        }
+
+        async function deleteAssignment(assignmentId) {
+            try {
+                if (!firebaseConnected) {
+                    const assignments = getLocalAssignments();
+                    const updatedAssignments = assignments.filter(a => a.id !== assignmentId);
+                    localStorage.setItem('medicalTestAssignments', JSON.stringify(updatedAssignments));
+                    return;
+                }
+
+                await db.collection('assignments').doc(assignmentId).delete();
+                
+                const assignments = getLocalAssignments();
+                const updatedAssignments = assignments.filter(a => a.id !== assignmentId);
+                localStorage.setItem('medicalTestAssignments', JSON.stringify(updatedAssignments));
+                
+            } catch (error) {
+                console.error('❌ Ошибка удаления назначения:', error);
+                throw error;
+            }
+        }
+
+        async function loadTestResults() {
+            try {
+                if (!firebaseConnected) {
+                    return getLocalTestResults();
+                }
+
+                const snapshot = await db.collection('testResults').get();
+                const testResults = [];
+                
+                snapshot.forEach(doc => {
+                    testResults.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                return testResults;
+            } catch (error) {
+                console.error('❌ Ошибка загрузки результатов тестов:', error);
+                return getLocalTestResults();
+            }
+        }
+
+        async function saveTestResult(testResult) {
+            try {
+                if (!firebaseConnected) {
+                    return saveTestResultToLocal(testResult);
+                }
+
+                const docRef = await db.collection('testResults').add(testResult);
+                testResult.id = docRef.id;
+                
+                saveTestResultToLocal(testResult);
+                return testResult;
+            } catch (error) {
+                console.error('❌ Ошибка сохранения результата теста:', error);
+                saveTestResultToLocal(testResult);
+                throw error;
+            }
+        }
+
+        // НОВАЯ ФУНКЦИЯ: Загрузка разрешений на пересдачу
+        async function loadRetakePermissions() {
+            try {
+                if (!firebaseConnected) {
+                    return getLocalRetakePermissions();
+                }
+
+                const snapshot = await db.collection('retakePermissions').get();
+                const permissions = [];
+                
+                snapshot.forEach(doc => {
+                    permissions.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                return permissions;
+            } catch (error) {
+                console.error('❌ Ошибка загрузки разрешений на пересдачу:', error);
+                return getLocalRetakePermissions();
+            }
+        }
+
+        // НОВАЯ ФУНКЦИЯ: Сохранение разрешения на пересдачу
+        async function saveRetakePermission(permission) {
+            try {
+                if (!firebaseConnected) {
+                    return saveRetakePermissionToLocal(permission);
+                }
+
+                if (permission.id) {
+                    await db.collection('retakePermissions').doc(permission.id).update(permission);
+                } else {
+                    const docRef = await db.collection('retakePermissions').add(permission);
+                    permission.id = docRef.id;
+                }
+                
+                saveRetakePermissionToLocal(permission);
+                return permission;
+            } catch (error) {
+                console.error('❌ Ошибка сохранения разрешения на пересдачу:', error);
+                saveRetakePermissionToLocal(permission);
+                throw error;
+            }
+        }
+
+        // НОВАЯ ФУНКЦИЯ: Удаление разрешения на пересдачу
+        async function deleteRetakePermission(permissionId) {
+            try {
+                if (!firebaseConnected) {
+                    const permissions = getLocalRetakePermissions();
+                    const updatedPermissions = permissions.filter(p => p.id !== permissionId);
+                    localStorage.setItem('medicalTestRetakePermissions', JSON.stringify(updatedPermissions));
+                    return;
+                }
+
+                await db.collection('retakePermissions').doc(permissionId).delete();
+                
+                const permissions = getLocalRetakePermissions();
+                const updatedPermissions = permissions.filter(p => p.id !== permissionId);
+                localStorage.setItem('medicalTestRetakePermissions', JSON.stringify(updatedPermissions));
+                
+            } catch (error) {
+                console.error('❌ Ошибка удаления разрешения на пересдачу:', error);
+                throw error;
+            }
+        }
+
+        // Функции для работы с localStorage
+        function getLocalUsers() {
+            try {
+                const users = localStorage.getItem('medicalTestUsers');
+                return users ? JSON.parse(users) : [];
+            } catch (error) {
+                console.error('❌ Ошибка получения пользователей из localStorage:', error);
+                return [];
+            }
+        }
+
+        function saveUserToLocal(user) {
+            try {
+                const users = getLocalUsers();
+                const existingIndex = users.findIndex(u => u.id === user.id);
+                
+                if (existingIndex >= 0) {
+                    users[existingIndex] = user;
+                } else {
+                    users.push(user);
+                }
+                
+                localStorage.setItem('medicalTestUsers', JSON.stringify(users));
+            } catch (error) {
+                console.error('❌ Ошибка сохранения пользователя в localStorage:', error);
+            }
+        }
+
+        function getLocalQuestionSets() {
+            try {
+                const questionSets = localStorage.getItem('medicalTestQuestionSets');
+                if (questionSets) {
+                    const sets = JSON.parse(questionSets);
+                    return sets.map(set => ({
+                        ...set,
+                        totalTime: set.totalTime || 30
+                    }));
+                }
+                return [];
+            } catch (error) {
+                console.error('❌ Ошибка получения наборов вопросов из localStorage:', error);
+                return [];
+            }
+        }
+
+        function saveQuestionSetToLocal(questionSet) {
+            try {
+                const questionSets = getLocalQuestionSets();
+                const existingIndex = questionSets.findIndex(qs => qs.id === questionSet.id);
+                
+                if (existingIndex >= 0) {
+                    questionSets[existingIndex] = questionSet;
+                } else {
+                    questionSets.push(questionSet);
+                }
+                
+                localStorage.setItem('medicalTestQuestionSets', JSON.stringify(questionSets));
+            } catch (error) {
+                console.error('❌ Ошибка сохранения набора вопросов в localStorage:', error);
+            }
+        }
+
+        function getLocalAssignments() {
+            try {
+                const assignments = localStorage.getItem('medicalTestAssignments');
+                return assignments ? JSON.parse(assignments) : [];
+            } catch (error) {
+                console.error('❌ Ошибка получения назначений из localStorage:', error);
+                return [];
+            }
+        }
+
+        function saveAssignmentToLocal(assignment) {
+            try {
+                const assignments = getLocalAssignments();
+                const existingIndex = assignments.findIndex(a => a.id === assignment.id);
+                
+                if (existingIndex >= 0) {
+                    assignments[existingIndex] = assignment;
+                } else {
+                    assignments.push(assignment);
+                }
+                
+                localStorage.setItem('medicalTestAssignments', JSON.stringify(assignments));
+            } catch (error) {
+                console.error('❌ Ошибка сохранения назначения в localStorage:', error);
+            }
+        }
+
+        function getLocalTestResults() {
+            try {
+                const testResults = localStorage.getItem('medicalTestResults');
+                return testResults ? JSON.parse(testResults) : [];
+            } catch (error) {
+                console.error('❌ Ошибка получения результатов тестов из localStorage:', error);
+                return [];
+            }
+        }
+
+        function saveTestResultToLocal(testResult) {
+            try {
+                const testResults = getLocalTestResults();
+                testResults.push(testResult);
+                localStorage.setItem('medicalTestResults', JSON.stringify(testResults));
+            } catch (error) {
+                console.error('❌ Ошибка сохранения результата теста в localStorage:', error);
+            }
+        }
+
+        // НОВЫЕ ФУНКЦИИ ДЛЯ РАЗРЕШЕНИЙ НА ПЕРЕСДАЧУ В LOCALSTORAGE
+        function getLocalRetakePermissions() {
+            try {
+                const permissions = localStorage.getItem('medicalTestRetakePermissions');
+                return permissions ? JSON.parse(permissions) : [];
+            } catch (error) {
+                console.error('❌ Ошибка получения разрешений на пересдачу из localStorage:', error);
+                return [];
+            }
+        }
+
+        function saveRetakePermissionToLocal(permission) {
+            try {
+                const permissions = getLocalRetakePermissions();
+                const existingIndex = permissions.findIndex(p => p.id === permission.id);
+                
+                if (existingIndex >= 0) {
+                    permissions[existingIndex] = permission;
+                } else {
+                    permissions.push(permission);
+                }
+                
+                localStorage.setItem('medicalTestRetakePermissions', JSON.stringify(permissions));
+            } catch (error) {
+                console.error('❌ Ошибка сохранения разрешения на пересдачу в localStorage:', error);
+            }
+        }
+
+        // Функция для получения отображаемого названия подразделения
+        function getUnitDisplayName(unit) {
+            const unitNames = {
+                'none': 'Нету',
+                'st': 'СТ',
+                '212': '212',
+                '501': '501',
+                '41': '41',
+                'cg': 'CG',
+                'attached': 'Прикомандированный'
+            };
+            return unitNames[unit] || 'Неизвестно';
+        }
+
+        // Функция для получения CSS класса подразделения
+        function getUnitClass(unit) {
+            const unitClasses = {
+                'none': 'unit-none',
+                'st': 'unit-st',
+                '212': 'unit-212',
+                '501': 'unit-501',
+                '41': 'unit-41',
+                'cg': 'unit-cg',
+                'attached': 'unit-attached'
+            };
+            return unitClasses[unit] || 'unit-none';
+        }
+
+        // Функция для получения московского времени
+        function getMoscowTime() {
+            const now = new Date();
+            // Московское время UTC+3
+            const moscowTime = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+            return moscowTime.toISOString();
+        }
+
+        // Функция для форматирования даты и времени
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('ru-RU', {
+                timeZone: 'Europe/Moscow',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // Основная логика приложения
+        let currentUser = null;
+        let currentQuestionSet = null;
+        let currentQuestionIndex = 0;
+        let userAnswers = [];
+        let totalTime = 30 * 60;
+        let questionTime = 60;
+        let timerInterval;
+        let questionTimerInterval;
+        let remainingQuestionTime = 0;
+        let selectedAssignment = null;
+
+        // DOM элементы
+        const userPanel = document.getElementById('user-panel');
+        const adminPanel = document.getElementById('admin-panel');
+        const adminToggle = document.getElementById('admin-toggle');
+        const userModeBtn = document.getElementById('user-mode');
+        const adminLogin = document.getElementById('admin-login');
+        const adminContent = document.getElementById('admin-content');
+        const adminLoginBtn = document.getElementById('admin-login-btn');
+        const adminLogoutBtn = document.getElementById('admin-logout');
+        const loginSection = document.getElementById('login-section');
+        const testSelectionSection = document.getElementById('test-selection-section');
+        const testSection = document.getElementById('test-section');
+        const resultsSection = document.getElementById('results-section');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const backToLoginBtn = document.getElementById('back-to-login');
+        const startSelectedTestBtn = document.getElementById('start-selected-test');
+        const submitTestBtn = document.getElementById('submit-test');
+        const restartTestBtn = document.getElementById('restart-test');
+        const nextQuestionBtn = document.getElementById('next-question');
+        const timerElement = document.getElementById('timer');
+        const questionTimerElement = document.getElementById('question-timer');
+        const questionCounterElement = document.getElementById('question-counter');
+        const questionsContainer = document.getElementById('questions-container');
+        const availableTestsContainer = document.getElementById('available-tests');
+        const currentUserElement = document.getElementById('current-user');
+        const currentUnitElement = document.getElementById('current-unit');
+        const scoreElement = document.getElementById('score');
+        const resultMessageElement = document.getElementById('result-message');
+        const resultsSummaryElement = document.getElementById('results-summary');
+        const resultsDetailsElement = document.getElementById('results-details');
+        const backToUserLoginBtn = document.getElementById('back-to-user-login');
+        const backToUserContainer = document.getElementById('back-to-user-container');
+
+        // Инициализация приложения
+        document.addEventListener('DOMContentLoaded', function() {
+            showLoginSection();
+            loadSettings();
+            initEventListeners();
+            loadAdminData();
+        });
+
+        function loadSettings() {
+            const savedSettings = localStorage.getItem('medicalTestSettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+            }
+        }
+
+        function saveSettings() {
+            const settings = {};
+            localStorage.setItem('medicalTestSettings', JSON.stringify(settings));
+        }
+
+        function initEventListeners() {
+            // ... (все существующие обработчики событий остаются без изменений) ...
+        }
+
+        // Аутентификация администратора
+        async function authenticateAdmin(username, password) {
+            try {
+                const users = await loadUsers();
+                const admin = users.find(u => u.login === username && u.password === password && u.role === 'admin');
+                
+                if (admin) {
+                    adminLogin.classList.add('hidden');
+                    adminContent.classList.remove('hidden');
+                    document.getElementById('admin-login-error').classList.add('hidden');
+                    // СКРЫВАЕМ кнопку "Вернуться к входу пользователей" при успешной авторизации администратора
+                    backToUserContainer.classList.add('hidden');
+                } else {
+                    document.getElementById('admin-login-error').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('❌ Ошибка аутентификации администратора:', error);
+                document.getElementById('admin-login-error').classList.remove('hidden');
+            }
+        }
+
+        // Аутентификация пользователя
+        async function authenticateUser(username, password) {
+            try {
+                const users = await loadUsers();
+                const user = users.find(u => u.login === username && u.password === password);
+                
+                if (user) {
+                    currentUser = user;
+                    localStorage.setItem('currentMedicalTestUser', JSON.stringify(user));
+                    document.getElementById('login-error').classList.add('hidden');
+                    document.getElementById('no-assignment-error').classList.add('hidden');
+                    
+                    await loadUserAssignments();
+                    
+                } else {
+                    document.getElementById('login-error').classList.remove('hidden');
+                    document.getElementById('no-assignment-error').classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('❌ Ошибка аутентификации:', error);
+                document.getElementById('login-error').classList.remove('hidden');
+                document.getElementById('no-assignment-error').classList.add('hidden');
+            }
+        }
+
+        // Загрузка назначений пользователя
+        async function loadUserAssignments() {
+            try {
+                const assignments = await loadAssignments();
+                const userAssignments = assignments.filter(a => a.userId === currentUser.id);
+                
+                if (userAssignments.length === 0) {
+                    document.getElementById('no-assignment-error').classList.remove('hidden');
+                    document.getElementById('login-error').classList.add('hidden');
+                    return;
+                }
+                
+                const questionSets = await loadQuestionSets();
+                const testResults = await loadTestResults();
+                const retakePermissions = await loadRetakePermissions();
+                const availableTests = [];
+                
+                for (const assignment of userAssignments) {
+                    const questionSet = questionSets.find(qs => qs.id === assignment.questionSetId);
+                    if (questionSet) {
+                        // Проверяем, проходил ли пользователь уже этот тест
+                        const userResults = testResults.filter(result => 
+                            result.userId === currentUser.id && 
+                            result.questionSetId === questionSet.id
+                        );
+                        
+                        // Проверяем, есть ли разрешение на пересдачу
+                        const hasRetakePermission = retakePermissions.some(permission => 
+                            permission.userId === currentUser.id && 
+                            permission.questionSetId === questionSet.id &&
+                            permission.isActive === true
+                        );
+                        
+                        const canRetake = userResults.length === 0 || hasRetakePermission;
+                        
+                        availableTests.push({
+                            assignment: assignment,
+                            questionSet: questionSet,
+                            completed: userResults.length > 0,
+                            canRetake: canRetake,
+                            resultsCount: userResults.length
+                        });
+                    }
+                }
+                
+                if (availableTests.length > 0) {
+                    showTestSelection(availableTests);
+                } else {
+                    document.getElementById('no-assignment-error').classList.remove('hidden');
+                }
+                
+            } catch (error) {
+                console.error('❌ Ошибка загрузки назначений:', error);
+                document.getElementById('no-assignment-error').classList.remove('hidden');
+            }
+        }
+
+        // Отображение выбора теста
+        function showTestSelection(availableTests) {
+            availableTestsContainer.innerHTML = '';
+            selectedAssignment = null;
+            startSelectedTestBtn.style.display = 'none';
+            
+            if (availableTests.length === 0) {
+                availableTestsContainer.innerHTML = '<p>Нет доступных тестов</p>';
+                return;
+            }
+            
+            availableTests.forEach((test, index) => {
+                const testOption = document.createElement('div');
+                testOption.className = 'test-option';
+                if (test.completed && !test.canRetake) {
+                    testOption.classList.add('test-completed');
+                }
+                testOption.setAttribute('data-index', index);
+                
+                let statusHtml = '';
+                if (test.completed) {
+                    if (test.canRetake) {
+                        statusHtml = `<span class="test-completed-badge">Пройден (разрешена пересдача)</span>`;
+                    } else {
+                        statusHtml = `<span class="test-completed-badge">Пройден</span>`;
+                    }
+                }
+                
+                testOption.innerHTML = `
+                    <h3>${test.questionSet.name} ${statusHtml}</h3>
+                    <p>${test.questionSet.questions ? test.questionSet.questions.length : 0} вопросов</p>
+                    <div class="test-info">
+                        <span>Время: ${test.questionSet.totalTime || 30} мин.</span>
+                        <span>Назначен: ${new Date(test.assignment.assignedAt).toLocaleDateString('ru-RU')}</span>
+                    </div>
+                    ${test.completed ? `<div class="test-info"><span>Количество попыток: ${test.resultsCount}</span></div>` : ''}
+                `;
+                
+                // Разрешаем выбор только если тест не пройден или разрешена пересдача
+                if (!test.completed || test.canRetake) {
+                    testOption.addEventListener('click', function() {
+                        document.querySelectorAll('.test-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        this.classList.add('selected');
+                        selectedAssignment = test;
+                        startSelectedTestBtn.style.display = 'block';
+                    });
+                } else {
+                    testOption.style.cursor = 'not-allowed';
+                    testOption.style.opacity = '0.7';
+                }
+                
+                availableTestsContainer.appendChild(testOption);
+            });
+            
+            showTestSelectionSection();
+        }
+
+        // Запуск выбранного теста
+        function startSelectedTest() {
+            if (!selectedAssignment) return;
+            
+            currentQuestionSet = selectedAssignment.questionSet;
+            totalTime = (currentQuestionSet.totalTime || 30) * 60;
+            startTest();
+            showTestSection();
+        }
+
+        // ... (остальные функции остаются без изменений до функции calculateResults) ...
+
+        // Расчет результатов
+        function calculateResults() {
+            if (!currentQuestionSet || !currentQuestionSet.questions) {
+                return {
+                    score: 0,
+                    correctAnswers: 0,
+                    totalQuestions: 0,
+                    percentage: 0
+                };
+            }
+            
+            let correctAnswers = 0;
+            const totalQuestions = currentQuestionSet.questions.length;
+            
+            const results = {
+                userId: currentUser.id,
+                userName: currentUser.login,
+                userUnit: currentUser.unit || 'none',
+                userRole: currentUser.role,
+                userRoleDisplay: getRoleDisplayName(currentUser.role),
+                userUnitDisplay: getUnitDisplayName(currentUser.unit || 'none'),
+                questionSetId: currentQuestionSet.id,
+                questionSetName: currentQuestionSet.name,
+                assignmentId: selectedAssignment ? selectedAssignment.assignment.id : null,
+                answers: [],
+                score: 0,
+                correctAnswers: 0,
+                totalQuestions: totalQuestions,
+                percentage: 0,
+                timestamp: getMoscowTime(), // Используем московское время
+                completedAt: formatDateTime(getMoscowTime()) // Форматированная дата и время
+            };
+            
+            currentQuestionSet.questions.forEach((question, index) => {
+                const userAnswer = userAnswers[index];
+                const isCorrect = userAnswer === question.correctAnswer;
+                
+                if (isCorrect) {
+                    correctAnswers++;
+                }
+                
+                results.answers.push({
+                    question: question.text,
+                    userAnswerIndex: userAnswer,
+                    userAnswer: userAnswer !== undefined ? question.options[userAnswer] : 'Не отвечено',
+                    correctAnswerIndex: question.correctAnswer,
+                    correctAnswer: question.options[question.correctAnswer],
+                    isCorrect: isCorrect,
+                    isAnswered: userAnswer !== undefined
+                });
+            });
+            
+            results.correctAnswers = correctAnswers;
+            results.score = correctAnswers;
+            results.percentage = Math.round((correctAnswers / totalQuestions) * 100);
+            
+            return results;
+        }
+
+        // Отображение результатов
+        function displayResults(results) {
+            currentUserElement.textContent = currentUser.login;
+            currentUnitElement.textContent = getUnitDisplayName(currentUser.unit || 'none');
+            scoreElement.textContent = `${results.score} из ${results.totalQuestions}`;
+            
+            if (results.percentage >= 80) {
+                resultMessageElement.textContent = 'Отличный результат!';
+            } else if (results.percentage >= 60) {
+                resultMessageElement.textContent = 'Хороший результат!';
+            } else {
+                resultMessageElement.textContent = 'Вам нужно больше практики.';
+            }
+            
+            resultsSummaryElement.innerHTML = `
+                <div class="summary-item">
+                    <div class="summary-value">${results.percentage}%</div>
+                    <div class="summary-label">Правильных ответов</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${results.correctAnswers}</div>
+                    <div class="summary-label">Правильных</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${results.totalQuestions - results.correctAnswers}</div>
+                    <div class="summary-label">Неправильных</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${formatDateTime(results.timestamp)}</div>
+                    <div class="summary-label">Дата и время</div>
+                </div>
+            `;
+            
+            resultsDetailsElement.innerHTML = '';
+            
+            results.answers.forEach((answer, index) => {
+                const resultItem = document.createElement('div');
+                
+                if (answer.isCorrect) {
+                    resultItem.className = 'result-item correct';
+                } else if (answer.isAnswered) {
+                    resultItem.className = 'result-item incorrect';
+                } else {
+                    resultItem.className = 'result-item unanswered';
+                }
+                
+                const userAnswerClass = answer.isCorrect ? 'user-answer correct' : 'user-answer';
+                
+                let answerHtml = `
+                    <div class="result-question">${index + 1}. ${answer.question}</div>
+                    <div class="result-answer">Ваш ответ: <span class="${userAnswerClass}">${answer.userAnswer}</span></div>
+                `;
+                
+                if (!answer.isCorrect) {
+                    answerHtml += `<div class="result-answer">Правильный ответ: <span class="correct-answer">${answer.correctAnswer}</span></div>`;
+                }
+                
+                if (!answer.isAnswered) {
+                    answerHtml += `<div class="result-answer">Вы не ответили на этот вопрос</div>`;
+                }
+                
+                resultItem.innerHTML = answerHtml;
+                resultsDetailsElement.appendChild(resultItem);
+            });
+            
+            restartTestBtn.classList.add('hidden');
+        }
+
+        // Сохранение результатов теста
+        async function saveTestResult(results) {
+            try {
+                await saveTestResult(results);
+                
+                // После сохранения результата, удаляем разрешение на пересдачу если оно было
+                const retakePermissions = await loadRetakePermissions();
+                const userPermission = retakePermissions.find(permission => 
+                    permission.userId === currentUser.id && 
+                    permission.questionSetId === results.questionSetId &&
+                    permission.isActive === true
+                );
+                
+                if (userPermission) {
+                    await deleteRetakePermission(userPermission.id);
+                }
+                
+            } catch (error) {
+                console.error('❌ Ошибка сохранения результата теста:', error);
+            }
+        }
+
+        // Админ-функции
+        async function loadAdminData() {
+            await loadUsersList();
+            await loadQuestionSetsList();
+            await loadAssignmentsList();
+            await loadTestResultsList();
+        }
+
+        // Управление пользователями
+        async function loadUsersList() {
+            try {
+                const users = await loadUsers();
+                const usersList = document.getElementById('users-list');
+                usersList.innerHTML = '';
+                
+                const regularUsers = users.filter(user => user.role !== 'admin');
+                
+                if (regularUsers.length === 0) {
+                    usersList.innerHTML = '<p>Пользователи не найдены</p>';
+                    return;
+                }
+                
+                regularUsers.forEach(user => {
+                    const userItem = document.createElement('div');
+                    userItem.className = 'user-item';
+                    
+                    let roleDisplayName = '';
+                    let roleClass = '';
+                    
+                    if (user.role === 'doctor') {
+                        roleDisplayName = 'Полевой Врач';
+                        roleClass = 'role-doctor';
+                    } else if (user.role === 'medic') {
+                        roleDisplayName = 'Полевой Фельдшер';
+                        roleClass = 'role-medic';
+                    } else if (user.role === 'sanitary') {
+                        roleDisplayName = 'Полевой Санитар';
+                        roleClass = 'role-sanitary';
+                    } else {
+                        roleDisplayName = user.role;
+                        roleClass = 'role-user';
+                    }
+                    
+                    const unitDisplayName = getUnitDisplayName(user.unit || 'none');
+                    const unitClass = getUnitClass(user.unit || 'none');
+                    
+                    userItem.innerHTML = `
+                        <div class="user-header">
+                            <div>
+                                <strong>${user.login}</strong>
+                                <span class="user-role ${roleClass}">${roleDisplayName}</span>
+                                <span class="user-unit ${unitClass}">${unitDisplayName}</span>
+                            </div>
+                            <div class="user-actions">
+                                <button class="btn btn-warning edit-user" data-id="${user.id}">Редактировать</button>
+                                <button class="btn btn-danger delete-user" data-id="${user.id}">Удалить</button>
+                            </div>
+                        </div>
+                        <div class="user-info">
+                            <div class="user-stats">ID: ${user.id}</div>
+                        </div>
+                    `;
+                    
+                    usersList.appendChild(userItem);
+                });
+                
+                usersList.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('edit-user')) {
+                        const userId = e.target.getAttribute('data-id');
+                        editUser(userId);
+                    }
+                    if (e.target.classList.contains('delete-user')) {
+                        const userId = e.target.getAttribute('data-id');
+                        deleteUserById(userId);
+                    }
+                });
+                
+                updateUserSelect();
+                
+            } catch (error) {
+                console.error('❌ Ошибка загрузки списка пользователей:', error);
+            }
+        }
+
+        // ... (остальные функции админ-панели остаются без изменений до вкладки результатов) ...
+
+        // Результаты тестов
+        async function loadTestResultsList() {
+            try {
+                const testResults = await loadTestResults();
+                const testResultsList = document.getElementById('test-results-list');
+                testResultsList.innerHTML = '';
+                
+                if (testResults.length === 0) {
+                    testResultsList.innerHTML = '<p>Результаты тестов не найдены</p>';
+                    return;
+                }
+                
+                testResults.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                for (const result of testResults) {
+                    const users = await loadUsers();
+                    const questionSets = await loadQuestionSets();
+                    
+                    const user = users.find(u => u.id === result.userId);
+                    const questionSet = questionSets.find(qs => qs.id === result.questionSetId);
+                    
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'result-item';
+                    
+                    const date = formatDateTime(result.timestamp);
+                    
+                    resultItem.innerHTML = `
+                        <div class="result-header">
+                            <div>
+                                <strong>${user ? user.login : 'Неизвестный пользователь'} (${result.userUnitDisplay || getUnitDisplayName(user?.unit || 'none')}, ${result.userRoleDisplay || getRoleDisplayName(user?.role)})</strong> - ${questionSet ? `${questionSet.name} (${questionSet.totalTime || 30} мин)` : 'Неизвестный набор'}
+                            </div>
+                            <div class="result-score">${result.score}/${result.totalQuestions} (${result.percentage}%)</div>
+                        </div>
+                        <div class="result-info">
+                            <div>Дата и время прохождения: ${date}</div>
+                            <div>Правильных ответов: ${result.correctAnswers} из ${result.totalQuestions}</div>
+                            <div>Подразделение: ${result.userUnitDisplay || getUnitDisplayName(user?.unit || 'none')}</div>
+                            <div>Должность: ${result.userRoleDisplay || getRoleDisplayName(user?.role)}</div>
+                        </div>
+                        <div class="result-details">
+                            <button class="btn btn-secondary view-result-details" data-id="${result.id}">Просмотреть детали</button>
+                            <button class="btn allow-retake-btn allow-retake" data-user-id="${result.userId}" data-question-set-id="${result.questionSetId}">Разрешить пересдачу</button>
+                        </div>
+                    `;
+                    
+                    testResultsList.appendChild(resultItem);
+                }
+                
+                testResultsList.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('view-result-details')) {
+                        const resultId = e.target.getAttribute('data-id');
+                        viewResultDetails(resultId);
+                    }
+                    if (e.target.classList.contains('allow-retake')) {
+                        const userId = e.target.getAttribute('data-user-id');
+                        const questionSetId = e.target.getAttribute('data-question-set-id');
+                        allowRetakeTest(userId, questionSetId);
+                    }
+                });
+                
+            } catch (error) {
+                console.error('❌ Ошибка загрузки результатов тестов:', error);
+            }
+        }
+
+        // НОВАЯ ФУНКЦИЯ: Разрешение на пересдачу теста
+        async function allowRetakeTest(userId, questionSetId) {
+            try {
+                const users = await loadUsers();
+                const questionSets = await loadQuestionSets();
+                
+                const user = users.find(u => u.id === userId);
+                const questionSet = questionSets.find(qs => qs.id === questionSetId);
+                
+                if (!user || !questionSet) {
+                    alert('Пользователь или набор вопросов не найден');
+                    return;
+                }
+                
+                if (!confirm(`Разрешить пользователю ${user.login} пересдать тест "${questionSet.name}"?`)) {
+                    return;
+                }
+                
+                const newPermission = {
+                    userId: userId,
+                    questionSetId: questionSetId,
+                    isActive: true,
+                    grantedAt: getMoscowTime(),
+                    grantedBy: 'admin' // В будущем можно добавить идентификатор администратора
+                };
+                
+                await saveRetakePermission(newPermission);
+                alert('Разрешение на пересдачу успешно предоставлено!');
+                
+                // Обновляем список результатов
+                await loadTestResultsList();
+                
+            } catch (error) {
+                console.error('❌ Ошибка предоставления разрешения на пересдачу:', error);
+                alert('Ошибка при предоставлении разрешения на пересдачу');
+            }
+        }
+
+        // Просмотр деталей результата
+        async function viewResultDetails(resultId) {
+            try {
+                const testResults = await loadTestResults();
+                const result = testResults.find(r => r.id === resultId);
+                
+                if (!result) {
+                    alert('Результат не найден');
+                    return;
+                }
+                
+                let detailsHtml = `
+                    <h3>Детали результата теста</h3>
+                    <p><strong>Пользователь:</strong> ${result.userName}</p>
+                    <p><strong>Подразделение:</strong> ${result.userUnitDisplay}</p>
+                    <p><strong>Должность:</strong> ${result.userRoleDisplay}</p>
+                    <p><strong>Набор вопросов:</strong> ${result.questionSetName}</p>
+                    <p><strong>Результат:</strong> ${result.score}/${result.totalQuestions} (${result.percentage}%)</p>
+                    <p><strong>Дата и время прохождения:</strong> ${result.completedAt || formatDateTime(result.timestamp)}</p>
+                    <hr>
+                    <h4>Ответы на вопросы:</h4>
+                `;
+                
+                result.answers.forEach((answer, index) => {
+                    detailsHtml += `
+                        <div class="result-detail-item ${answer.isCorrect ? 'correct' : 'incorrect'}">
+                            <p><strong>Вопрос ${index + 1}:</strong> ${answer.question}</p>
+                            <p><strong>Ваш ответ:</strong> ${answer.userAnswer}</p>
+                            ${!answer.isCorrect ? `<p><strong>Правильный ответ:</strong> ${answer.correctAnswer}</p>` : ''}
+                            <p><strong>Статус:</strong> ${answer.isCorrect ? 'Правильно' : 'Неправильно'}</p>
+                        </div>
+                        <hr>
+                    `;
+                });
+                
+                // Создаем модальное окно для отображения деталей
+                const modal = document.createElement('div');
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100%';
+                modal.style.height = '100%';
+                modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                modal.style.display = 'flex';
+                modal.style.justifyContent = 'center';
+                modal.style.alignItems = 'center';
+                modal.style.zIndex = '1000';
+                
+                const modalContent = document.createElement('div');
+                modalContent.style.backgroundColor = 'white';
+                modalContent.style.padding = '20px';
+                modalContent.style.borderRadius = '8px';
+                modalContent.style.maxWidth = '90%';
+                modalContent.style.maxHeight = '90%';
+                modalContent.style.overflow = 'auto';
+                modalContent.innerHTML = detailsHtml;
+                
+                const closeButton = document.createElement('button');
+                closeButton.textContent = 'Закрыть';
+                closeButton.className = 'btn btn-secondary';
+                closeButton.style.marginTop = '20px';
+                closeButton.addEventListener('click', function() {
+                    document.body.removeChild(modal);
+                });
+                
+                modalContent.appendChild(closeButton);
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
+                
+            } catch (error) {
+                console.error('❌ Ошибка просмотра деталей результата:', error);
+                alert('Ошибка при загрузке деталей результата');
+            }
+        }
+
+        // ... (остальные функции остаются без изменений) ...
+    </script>
+</body>
+</html>
