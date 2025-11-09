@@ -640,11 +640,6 @@
             color: white;
         }
         
-        .unit-attached {
-            background-color: #fca5a5;
-            color: #7f1d1d;
-        }
-        
         .unit-crimea {
             background-color: #7e22ce;
             color: white;
@@ -2189,7 +2184,7 @@
             });
             
             questionElement.appendChild(optionsContainer);
-            questionsContainer.appendChild(questionElement);
+            questionsContainer.appendChild(optionElement);
             
             if (userAnswers[currentQuestionIndex] !== undefined) {
                 const selectedOption = document.querySelector(`input[value="${userAnswers[currentQuestionIndex]}"]`);
@@ -2425,7 +2420,7 @@
             await loadUserAnswersList();
         }
 
-        // Управление пользователями
+        // Управление пользователями - ИСПРАВЛЕННАЯ ФУНКЦИЯ
         async function loadUsersList() {
             try {
                 const users = await loadUsers();
@@ -2483,21 +2478,52 @@
                     usersList.appendChild(userItem);
                 });
                 
-                usersList.addEventListener('click', function(e) {
-                    if (e.target.classList.contains('edit-user')) {
-                        const userId = e.target.getAttribute('data-id');
-                        editUser(userId);
-                    }
-                    if (e.target.classList.contains('delete-user')) {
-                        const userId = e.target.getAttribute('data-id');
+                // ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СОБЫТИЙ ДЛЯ УДАЛЕНИЯ ПОЛЬЗОВАТЕЛЕЙ
+                usersList.querySelectorAll('.delete-user').forEach(button => {
+                    button.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const userId = this.getAttribute('data-id');
                         deleteUserById(userId);
-                    }
+                    });
+                });
+                
+                usersList.querySelectorAll('.edit-user').forEach(button => {
+                    button.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const userId = this.getAttribute('data-id');
+                        editUser(userId);
+                    });
                 });
                 
                 updateUserSelect();
                 
             } catch (error) {
                 console.error('❌ Ошибка загрузки списка пользователей:', error);
+            }
+        }
+
+        // ИСПРАВЛЕННАЯ ФУНКЦИЯ УДАЛЕНИЯ ПОЛЬЗОВАТЕЛЯ
+        async function deleteUserById(userId) {
+            if (!confirm('Вы уверены, что хотите удалить этого пользователя? Все назначенные тесты также будут удалены.')) {
+                return;
+            }
+            
+            try {
+                // Удаляем все назначения пользователя
+                const assignments = await loadAssignments();
+                const userAssignments = assignments.filter(a => a.userId === userId);
+                
+                for (const assignment of userAssignments) {
+                    await deleteAssignment(assignment.id);
+                }
+                
+                // Удаляем пользователя
+                await deleteUser(userId);
+                await loadUsersList();
+                
+            } catch (error) {
+                console.error('❌ Ошибка удаления пользователя:', error);
+                alert('Ошибка при удалении пользователя');
             }
         }
 
@@ -2623,20 +2649,6 @@
 
         function cancelUserEdit() {
             document.getElementById('user-editor').classList.add('hidden');
-        }
-
-        async function deleteUserById(userId) {
-            if (!confirm('Вы уверены, что хотите удалить этого пользователя?')) {
-                return;
-            }
-            
-            try {
-                await deleteUser(userId);
-                await loadUsersList();
-            } catch (error) {
-                console.error('❌ Ошибка удаления пользователя:', error);
-                alert('Ошибка при удалении пользователя');
-            }
         }
 
         function updateUserSelect() {
@@ -2811,26 +2823,31 @@
                 questionsList.appendChild(questionItem);
             });
             
-            questionsList.addEventListener('click', function(e) {
-                if (e.target.classList.contains('delete-question-set')) {
-                    const questionSetId = e.target.getAttribute('data-set-id');
-                    deleteQuestionSetById(questionSetId);
-                    return;
-                }
-                
-                if (e.target.classList.contains('edit-question')) {
-                    const questionSetId = e.target.getAttribute('data-set-id');
-                    const questionIndex = parseInt(e.target.getAttribute('data-index'));
-                    editQuestion(questionSetId, questionIndex);
-                    return;
-                }
-                
-                if (e.target.classList.contains('delete-question')) {
-                    const questionSetId = e.target.getAttribute('data-set-id');
-                    const questionIndex = parseInt(e.target.getAttribute('data-index'));
+            // ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СОБЫТИЙ ДЛЯ УДАЛЕНИЯ ВОПРОСОВ
+            questionsList.querySelectorAll('.delete-question').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const questionSetId = this.getAttribute('data-set-id');
+                    const questionIndex = parseInt(this.getAttribute('data-index'));
                     deleteQuestion(questionSetId, questionIndex);
-                    return;
-                }
+                });
+            });
+            
+            questionsList.querySelectorAll('.edit-question').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const questionSetId = this.getAttribute('data-set-id');
+                    const questionIndex = parseInt(this.getAttribute('data-index'));
+                    editQuestion(questionSetId, questionIndex);
+                });
+            });
+            
+            questionsList.querySelectorAll('.delete-question-set').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const questionSetId = this.getAttribute('data-set-id');
+                    deleteQuestionSetById(questionSetId);
+                });
             });
         }
 
@@ -3148,15 +3165,32 @@
                     assignmentsList.appendChild(assignmentItem);
                 }
                 
-                assignmentsList.addEventListener('click', function(e) {
-                    if (e.target.classList.contains('delete-assignment')) {
-                        const assignmentId = e.target.getAttribute('data-id');
+                // ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СОБЫТИЙ ДЛЯ УДАЛЕНИЯ НАЗНАЧЕНИЙ
+                assignmentsList.querySelectorAll('.delete-assignment').forEach(button => {
+                    button.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const assignmentId = this.getAttribute('data-id');
                         deleteAssignmentById(assignmentId);
-                    }
+                    });
                 });
                 
             } catch (error) {
                 console.error('❌ Ошибка загрузки списка назначений:', error);
+            }
+        }
+
+        // ИСПРАВЛЕННАЯ ФУНКЦИЯ УДАЛЕНИЯ НАЗНАЧЕНИЯ
+        async function deleteAssignmentById(assignmentId) {
+            if (!confirm('Вы уверены, что хотите удалить это назначение?')) {
+                return;
+            }
+            
+            try {
+                await deleteAssignment(assignmentId);
+                await loadAssignmentsList(); // Обновляем список после удаления
+            } catch (error) {
+                console.error('❌ Ошибка удаления назначения:', error);
+                alert('Ошибка при удалении назначения');
             }
         }
 
@@ -3194,20 +3228,6 @@
             } catch (error) {
                 console.error('❌ Ошибка назначения теста:', error);
                 alert('Ошибка при назначении теста');
-            }
-        }
-
-        async function deleteAssignmentById(assignmentId) {
-            if (!confirm('Вы уверены, что хотите удалить это назначение?')) {
-                return;
-            }
-            
-            try {
-                await deleteAssignment(assignmentId);
-                await loadAssignmentsList();
-            } catch (error) {
-                console.error('❌ Ошибка удаления назначения:', error);
-                alert('Ошибка при удалении назначения');
             }
         }
 
