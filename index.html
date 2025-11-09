@@ -645,6 +645,11 @@
             color: #7f1d1d;
         }
         
+        .unit-crimea {
+            background-color: #7e22ce;
+            color: white;
+        }
+        
         .unit-none {
             background-color: transparent;
             color: #6c757d;
@@ -1211,12 +1216,12 @@
     <script>
         // 🔥 КОНФИГУРАЦИЯ FIREBASE
         const firebaseConfig = {
-            apiKey: "AIzaSyBYJhWIl_ODTKNwQ8p4JuvDXuqKTYEbWU4",
-            authDomain: "testingmk-c7c07.firebaseapp.com",
-            projectId: "testingmk-c7c07",
-            storageBucket: "testingmk-c7c07.firebasestorage.app",
-            messagingSenderId: "425991665299",
-            appId: "1:425991665299:web:825931edb1e3d773873f66"
+            apiKey: "AIzaSyAL8dXiQQFdboo1Z36mfcr41_ux4uf5KMs",
+            authDomain: "medicallsites.firebaseapp.com",
+            projectId: "medicallsites",
+            storageBucket: "medicallsites.firebasestorage.app",
+            messagingSenderId: "1089776801097",
+            appId: "1:1089776801097:web:34e3c634e63ae21280f698"
         };
 
         // Инициализация Firebase
@@ -1714,6 +1719,7 @@
                 '501': 'unit-501',
                 '41': 'unit-41',
                 'cg': 'unit-cg',
+                'crimea': 'unit-crimea',
                 'attached': 'unit-attached'
             };
             return unitClasses[unit] || 'unit-none';
@@ -3398,4 +3404,3 @@
     </script>
 </body>
 </html>
-```
