@@ -11,18 +11,12 @@
             padding: 0;
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
         }
         
         body {
             background-color: #f5f7fa;
             color: #333;
             line-height: 1.6;
-            -webkit-touch-callout: none;
-            -webkit-tap-highlight-color: transparent;
         }
         
         .container {
@@ -95,10 +89,6 @@
             border-radius: 4px;
             font-size: 16px;
             transition: border-color 0.3s;
-            -webkit-user-select: text;
-            -moz-user-select: text;
-            -ms-user-select: text;
-            user-select: text;
         }
         
         input:focus,
@@ -760,22 +750,6 @@
             border-left: 4px solid #5f6368;
         }
         
-        .protection-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            font-size: 24px;
-            text-align: center;
-        }
-        
         @media (max-width: 600px) {
             .container {
                 padding: 10px;
@@ -845,13 +819,6 @@
     </style>
 </head>
 <body>
-    <div class="protection-overlay" id="protection-overlay">
-        <div>
-            <h2>⚠️ Доступ запрещен</h2>
-            <p>Использование инструментов разработчика запрещено</p>
-        </div>
-    </div>
-    
     <div class="firebase-status hidden" id="firebase-status"></div>
     
     <div class="container">
@@ -1242,119 +1209,14 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 
     <script>
-        // 🔒 СИСТЕМА ЗАЩИТЫ ОТ КОПИРОВАНИЯ
-        (function() {
-            'use strict';
-            
-            // Запрет выделения текста
-            document.addEventListener('selectstart', function(e) {
-                e.preventDefault();
-                return false;
-            });
-            
-            // Запрет копирования
-            document.addEventListener('copy', function(e) {
-                e.preventDefault();
-                return false;
-            });
-            
-            // Запрет перетаскивания
-            document.addEventListener('dragstart', function(e) {
-                e.preventDefault();
-                return false;
-            });
-            
-            // Запрет контекстного меню
-            document.addEventListener('contextmenu', function(e) {
-                e.preventDefault();
-                return false;
-            });
-            
-            // Защита от открытия инструментов разработчика
-            let devToolsOpen = false;
-            
-            function checkDevTools() {
-                const widthThreshold = window.outerWidth - window.innerWidth > 100;
-                const heightThreshold = window.outerHeight - window.innerHeight > 100;
-                const orientation = widthThreshold ? 'vertical' : 'horizontal';
-                
-                if (!devToolsOpen && (widthThreshold || heightThreshold)) {
-                    devToolsOpen = true;
-                    showProtectionOverlay();
-                }
-            }
-            
-            // Проверка изменения размеров окна
-            setInterval(checkDevTools, 1000);
-            
-            // Обнаружение F12, Ctrl+Shift+I, Ctrl+Shift+C
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'F12' || 
-                    (e.ctrlKey && e.shiftKey && e.key === 'I') ||
-                    (e.ctrlKey && e.shiftKey && e.key === 'C') ||
-                    (e.ctrlKey && e.key === 'u')) {
-                    e.preventDefault();
-                    showProtectionOverlay();
-                    return false;
-                }
-            });
-            
-            // Обнаружение отладки
-            let debugDetected = false;
-            
-            function detectDebugger() {
-                const startTime = performance.now();
-                debugger;
-                const endTime = performance.now();
-                
-                if (endTime - startTime > 100) {
-                    if (!debugDetected) {
-                        debugDetected = true;
-                        showProtectionOverlay();
-                    }
-                }
-            }
-            
-            // Периодическая проверка отладки
-            setInterval(detectDebugger, 1000);
-            
-            function showProtectionOverlay() {
-                const overlay = document.getElementById('protection-overlay');
-                overlay.style.display = 'flex';
-                
-                // Блокировка всей страницы
-                document.body.style.overflow = 'hidden';
-                
-                // Автоматическое скрытие через 5 секунд
-                setTimeout(() => {
-                    overlay.style.display = 'none';
-                    document.body.style.overflow = '';
-                }, 5000);
-            }
-            
-            // Защита от вставки
-            document.addEventListener('paste', function(e) {
-                e.preventDefault();
-                return false;
-            });
-            
-            // Защита от вырезания
-            document.addEventListener('cut', function(e) {
-                e.preventDefault();
-                return false;
-            });
-            
-            console.log('🔒 Система защиты активирована');
-        })();
-
         // 🔥 КОНФИГУРАЦИЯ FIREBASE
         const firebaseConfig = {
-            apiKey: "AIzaSyAL8dXiQQFdboo1Z36mfcr41_ux4uf5KMs",
-            authDomain: "medicallsites.firebaseapp.com",
-            projectId: "medicallsites",
-            storageBucket: "medicallsites.firebasestorage.app",
-            messagingSenderId: "1089776801097",
-            appId: "1:1089776801097:web:34e3c634e63ae21280f698"
+            apiKey: "AIzaSyBYJhWIl_ODTKNwQ8p4JuvDXuqKTYEbWU4",
+            authDomain: "testingmk-c7c07.firebaseapp.com",
+            projectId: "testingmk-c7c07",
+            storageBucket: "testingmk-c7c07.firebasestorage.app",
+            messagingSenderId: "425991665299",
+            appId: "1:425991665299:web:825931edb1e3d773873f66"
         };
 
         // Инициализация Firebase
@@ -1371,6 +1233,7 @@
                 console.log("✅ Firebase подключен");
                 updateFirebaseStatus(true);
                 
+                // Создаем администратора по умолчанию
                 createDefaultAdmin();
             } else {
                 console.log("⚠️ Firebase не настроен, используется localStorage");
@@ -1381,6 +1244,7 @@
             updateFirebaseStatus(false);
         }
 
+        // Функция для создания администратора по умолчанию
         async function createDefaultAdmin() {
             try {
                 const users = await loadUsers();
@@ -1391,7 +1255,8 @@
                         login: 'admin',
                         password: 'admin123',
                         role: 'admin',
-                        unit: 'none'
+                        unit: 'none',
+                        createdAt: new Date().toISOString()
                     };
                     
                     await saveUser(defaultAdmin);
@@ -1445,13 +1310,15 @@
                     return saveUserToLocal(user);
                 }
 
-                if (user.id) {
-                    await db.collection('users').doc(user.id).update(user);
-                } else {
+                // Если у пользователя нет ID, создаем нового
+                if (!user.id) {
                     const docRef = await db.collection('users').add(user);
                     user.id = docRef.id;
+                    return user;
                 }
                 
+                // Если ID есть, обновляем существующего пользователя
+                await db.collection('users').doc(user.id).set(user, { merge: true });
                 saveUserToLocal(user);
                 return user;
             } catch (error) {
@@ -1514,13 +1381,15 @@
                     return saveQuestionSetToLocal(questionSet);
                 }
 
-                if (questionSet.id) {
-                    await db.collection('questionSets').doc(questionSet.id).update(questionSet);
-                } else {
+                // Если у набора нет ID, создаем новый
+                if (!questionSet.id) {
                     const docRef = await db.collection('questionSets').add(questionSet);
                     questionSet.id = docRef.id;
+                    return questionSet;
                 }
                 
+                // Если ID есть, обновляем существующий набор
+                await db.collection('questionSets').doc(questionSet.id).set(questionSet, { merge: true });
                 saveQuestionSetToLocal(questionSet);
                 return questionSet;
             } catch (error) {
@@ -1580,13 +1449,15 @@
                     return saveAssignmentToLocal(assignment);
                 }
 
-                if (assignment.id) {
-                    await db.collection('assignments').doc(assignment.id).update(assignment);
-                } else {
+                // Если у назначения нет ID, создаем новое
+                if (!assignment.id) {
                     const docRef = await db.collection('assignments').add(assignment);
                     assignment.id = docRef.id;
+                    return assignment;
                 }
                 
+                // Если ID есть, обновляем существующее назначение
+                await db.collection('assignments').doc(assignment.id).set(assignment, { merge: true });
                 saveAssignmentToLocal(assignment);
                 return assignment;
             } catch (error) {
@@ -2699,7 +2570,8 @@
                     login: login,
                     password: password,
                     role: 'doctor',
-                    unit: 'none'
+                    unit: 'none',
+                    createdAt: new Date().toISOString()
                 };
                 
                 await saveUser(newUser);
