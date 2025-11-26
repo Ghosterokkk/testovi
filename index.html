@@ -1635,12 +1635,31 @@
         function saveTestResultToLocal(testResult) {
             try {
                 const testResults = getLocalTestResults();
-                if (!testResult.id) {
-                    testResult.id = 'result_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                
+                // Ищем существующий результат для этого пользователя и теста
+                const existingIndex = testResults.findIndex(result => 
+                    result.userId === testResult.userId && 
+                    result.questionSetId === testResult.questionSetId
+                );
+                
+                if (existingIndex >= 0) {
+                    // Обновляем существующий результат
+                    testResults[existingIndex] = {
+                        ...testResults[existingIndex],
+                        ...testResult,
+                        id: testResults[existingIndex].id // Сохраняем старый ID
+                    };
+                    localStorage.setItem('medicalTestResults', JSON.stringify(testResults));
+                    return testResults[existingIndex];
+                } else {
+                    // Создаем новый результат
+                    if (!testResult.id) {
+                        testResult.id = 'result_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    }
+                    testResults.push(testResult);
+                    localStorage.setItem('medicalTestResults', JSON.stringify(testResults));
+                    return testResult;
                 }
-                testResults.push(testResult);
-                localStorage.setItem('medicalTestResults', JSON.stringify(testResults));
-                return testResult;
             } catch (error) {
                 console.error('❌ Ошибка сохранения результата теста в localStorage:', error);
                 return testResult;
@@ -1899,6 +1918,7 @@
         async function saveTestResult(testResult) {
             if (firebaseConnected) {
                 try {
+                    // Ищем существующий результат для этого пользователя и теста
                     const existingResults = await loadTestResults();
                     const existingResult = existingResults.find(result => 
                         result.userId === testResult.userId && 
@@ -1906,10 +1926,12 @@
                     );
 
                     if (existingResult) {
+                        // Обновляем существующий результат
                         await updateTestResult(existingResult.id, testResult);
                         testResult.id = existingResult.id;
                         return testResult;
                     } else {
+                        // Создаем новый результат
                         const docRef = await firebase.firestore().collection('testResults').add(testResult);
                         testResult.id = docRef.id;
                         return saveTestResultToLocal(testResult);
@@ -1919,19 +1941,7 @@
                     return saveTestResultToLocal(testResult);
                 }
             } else {
-                const testResults = getLocalTestResults();
-                const existingIndex = testResults.findIndex(result => 
-                    result.userId === testResult.userId && 
-                    result.questionSetId === testResult.questionSetId
-                );
-
-                if (existingIndex !== -1) {
-                    testResults[existingIndex] = { ...testResults[existingIndex], ...testResult };
-                    localStorage.setItem('medicalTestResults', JSON.stringify(testResults));
-                    return testResults[existingIndex];
-                } else {
-                    return saveTestResultToLocal(testResult);
-                }
+                return saveTestResultToLocal(testResult);
             }
         }
 
@@ -2189,8 +2199,14 @@
             viewRecordBookFromProfile.addEventListener('click', showRecordBook);
             logoutFromProfile.addEventListener('click', handleLogout);
             viewRecordBookFromResults.addEventListener('click', showRecordBook);
-            backToProfileFromResults.addEventListener('click', showTestSelectionSection);
-            backToProfileFromRecord.addEventListener('click', showTestSelectionSection);
+            backToProfileFromResults.addEventListener('click', function() {
+                // При возврате из результатов обновляем список тестов
+                loadUserAssignments();
+            });
+            backToProfileFromRecord.addEventListener('click', function() {
+                // При возврате из зачётной книжки обновляем список тестов
+                loadUserAssignments();
+            });
 
             // Поиск и фильтры
             document.getElementById('user-search').addEventListener('input', loadUsersList);
@@ -2441,7 +2457,17 @@
                                 assignment: assignment,
                                 questionSet: questionSet,
                                 attemptsUsed: attemptsUsed,
-                                maxAttempts: maxAttempts
+                                maxAttempts: maxAttempts,
+                                canTakeTest: true
+                            });
+                        } else {
+                            // Показываем тест, но с информацией о том, что попытки исчерпаны
+                            availableTests.push({
+                                assignment: assignment,
+                                questionSet: questionSet,
+                                attemptsUsed: attemptsUsed,
+                                maxAttempts: maxAttempts,
+                                canTakeTest: false
                             });
                         }
                     }
@@ -2470,6 +2496,7 @@
             
             if (availableTests.length === 0) {
                 availableTestsContainer.innerHTML = '<p>Нет доступных тестов</p>';
+                showRecordBook();
                 return;
             }
             
@@ -2489,15 +2516,15 @@
                         <span>Время: ${test.questionSet.totalTime || 30} мин.</span>
                         <span>${attemptsInfo}</span>
                     </div>
-                    <div class="attempts-info ${test.maxAttempts > 0 && test.attemptsUsed >= test.maxAttempts ? 'attempts-warning' : ''}">
-                        ${test.maxAttempts > 0 && test.attemptsUsed >= test.maxAttempts ? 
+                    <div class="attempts-info ${!test.canTakeTest ? 'attempts-warning' : ''}">
+                        ${!test.canTakeTest ? 
                           '❌ Вы исчерпали все попытки' : 
                           `✅ Доступно ${test.maxAttempts === 0 ? 'неограниченно' : (test.maxAttempts - test.attemptsUsed)} попыток`}
                     </div>
                 `;
                 
                 // Блокируем выбор если исчерпаны попытки
-                if (test.maxAttempts > 0 && test.attemptsUsed >= test.maxAttempts) {
+                if (!test.canTakeTest) {
                     testOption.style.opacity = '0.6';
                     testOption.style.cursor = 'not-allowed';
                 } else {
@@ -2526,7 +2553,7 @@
             }
             
             // Дополнительная проверка на случай, если пользователь попытается обойти ограничения
-            if (selectedAssignment.maxAttempts > 0 && selectedAssignment.attemptsUsed >= selectedAssignment.maxAttempts) {
+            if (!selectedAssignment.canTakeTest) {
                 alert('Вы исчерпали все доступные попытки для этого теста.');
                 return;
             }
