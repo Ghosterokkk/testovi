@@ -1086,7 +1086,7 @@
                         <p>Роль: <span id="user-display-role"></span></p>
                     </div>
                     <div class="user-profile-actions">
-                        <button class="btn btn-transparent" id="view-record-book-from-profile">📚 Зачётная книжка</button>
+                        <button class="btn btn-transparent" id="view-record-book-from-profile">📟 Зачётный Датапад</button>
                         <button class="btn btn-secondary" id="logout-from-profile">Выйти</button>
                     </div>
                 </div>
@@ -2511,7 +2511,7 @@
                 
                 testOption.innerHTML = `
                     <h3>${test.questionSet.name}</h3>
-                    <p>${test.questionSet.questions ? test.questionSet.questions.length : 0} вопросов</p>
+                    <p>${test.questionSet.questions ? test.questionSet.questions.length : 0} Вопрос(-ов)</p>
                     <div class="test-info">
                         <span>Время: ${test.questionSet.totalTime || 30} мин.</span>
                         <span>${attemptsInfo}</span>
@@ -2519,7 +2519,7 @@
                     <div class="attempts-info ${!test.canTakeTest ? 'attempts-warning' : ''}">
                         ${!test.canTakeTest ? 
                           '❌ Вы исчерпали все попытки' : 
-                          `✅ Доступно ${test.maxAttempts === 0 ? 'неограниченно' : (test.maxAttempts - test.attemptsUsed)} попыток`}
+                          `✅ Доступно ${test.maxAttempts === 0 ? 'неограниченно' : (test.maxAttempts - test.attemptsUsed)} Попыток`}
                     </div>
                 `;
                 
@@ -2915,7 +2915,7 @@
                 if (userResults.length === 0) {
                     userRecordsList.innerHTML = `
                         <div class="record-item">
-                            <h3>Записей пока нет</h3>
+                            <h3>Пройденных зачётов пока нету</h3>
                             <p>Пройдите тесты, чтобы увидеть свои результаты здесь.</p>
                         </div>
                     `;
